@@ -1,5 +1,8 @@
 package com.sparrowrecsys.offline.spark.featureeng
 
+import java.io.FileOutputStream
+import java.nio.file.{Files, Paths, StandardCopyOption}
+
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.{SparkConf, sql}
 import org.apache.spark.ml.{Pipeline, PipelineStage}
@@ -40,6 +43,7 @@ object FeatureEngineering {
 
     val genreIndexSamples = stringIndexerModel.transform(samplesWithGenre)
       .withColumn("genreIndexInt", col("genreIndex").cast(sql.types.IntegerType))
+    genreIndexSamples.show(10)
 
     val indexSize = genreIndexSamples.agg(max(col("genreIndexInt"))).head().getAs[Int](0) + 1
 
@@ -98,8 +102,9 @@ object FeatureEngineering {
       .set("spark.submit.deployMode", "client")
 
     val spark = SparkSession.builder.config(conf).getOrCreate()
-    val movieResourcesPath = this.getClass.getResource("/webroot/sampledata/movies.csv")
-    val movieSamples = spark.read.format("csv").option("header", "true").load(movieResourcesPath.getPath)
+//    val movieResourcesPath = this.getClass.getResource("/webroot/sampledata/movies.csv")
+//    val movieSamples = spark.read.format("csv").option("header", "true").load(movieResourcesPath.getPath)
+    val movieSamples = spark.read.format("csv").option("header", "true").load(resourceToLocal("/webroot/sampledata/movies.csv"))
     println("Raw Movie Samples:")
     movieSamples.printSchema()
     movieSamples.show(10)
@@ -112,8 +117,18 @@ object FeatureEngineering {
 
     println("Numerical features Example:")
     val ratingsResourcesPath = this.getClass.getResource("/webroot/sampledata/ratings.csv")
-    val ratingSamples = spark.read.format("csv").option("header", "true").load(ratingsResourcesPath.getPath)
+    val ratingSamples = spark.read.format("csv").option("header", "true").load(resourceToLocal("/webroot/sampledata/ratings.csv"))
     ratingFeatures(ratingSamples)
 
+  }
+
+  def resourceToLocal(resourcePath: String): String = {
+    val outPath = Paths.get("/tmp/" + resourcePath)
+    val resourceFileStream = getClass.getResourceAsStream(resourcePath)
+    Files.createDirectories(outPath.getParent)
+    Files.copy(resourceFileStream, outPath, StandardCopyOption.REPLACE_EXISTING)
+    val ret = s"file://${outPath.toUri.getPath}"
+    println(ret)
+    ret
   }
 }

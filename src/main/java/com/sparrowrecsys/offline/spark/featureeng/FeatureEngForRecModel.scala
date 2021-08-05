@@ -1,5 +1,7 @@
 package com.sparrowrecsys.offline.spark.featureeng
 
+import java.nio.file.{Files, Paths, StandardCopyOption}
+
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.expressions.{UserDefinedFunction, Window}
@@ -124,7 +126,7 @@ object FeatureEngForRecModel {
       .filter(col("userRatingCount") > 1)
 
     samplesWithUserFeatures.printSchema()
-    samplesWithUserFeatures.show(100, truncate = false)
+    samplesWithUserFeatures.show(10, truncate = false)
 
     samplesWithUserFeatures
   }
@@ -182,9 +184,9 @@ object FeatureEngForRecModel {
 
     val sampleResourcesPath = this.getClass.getResource(savePath)
     training.repartition(1).write.option("header", "true").mode(SaveMode.Overwrite)
-      .csv(sampleResourcesPath+"/trainingSamples")
+      .csv(savePath+"/trainingSamples")
     test.repartition(1).write.option("header", "true").mode(SaveMode.Overwrite)
-      .csv(sampleResourcesPath+"/testSamples")
+      .csv(savePath+"/testSamples")
   }
 
   def splitAndSaveTrainingTestSamplesByTimeStamp(samples:DataFrame, savePath:String)={
@@ -268,10 +270,10 @@ object FeatureEngForRecModel {
 
     val spark = SparkSession.builder.config(conf).getOrCreate()
     val movieResourcesPath = this.getClass.getResource("/webroot/sampledata/movies.csv")
-    val movieSamples = spark.read.format("csv").option("header", "true").load(movieResourcesPath.getPath)
+    val movieSamples = spark.read.format("csv").option("header", "true").load(resourceToLocal("/webroot/sampledata/movies.csv"))
 
     val ratingsResourcesPath = this.getClass.getResource("/webroot/sampledata/ratings.csv")
-    val ratingSamples = spark.read.format("csv").option("header", "true").load(ratingsResourcesPath.getPath)
+    val ratingSamples = spark.read.format("csv").option("header", "true").load(resourceToLocal("/webroot/sampledata/ratings.csv"))
 
     val ratingSamplesWithLabel = addSampleLabel(ratingSamples)
     ratingSamplesWithLabel.show(10, truncate = false)
@@ -281,7 +283,7 @@ object FeatureEngForRecModel {
 
 
     //save samples as csv format
-    splitAndSaveTrainingTestSamples(samplesWithUserFeatures, "/webroot/sampledata")
+    splitAndSaveTrainingTestSamples(samplesWithUserFeatures, "file:///tmp/webroot/sampledata")
 
     //save user features and item features to redis for online inference
     //extractAndSaveUserFeaturesToRedis(samplesWithUserFeatures)
@@ -289,4 +291,13 @@ object FeatureEngForRecModel {
     spark.close()
   }
 
+  def resourceToLocal(resourcePath: String): String = {
+    val outPath = Paths.get("/tmp/" + resourcePath)
+    val resourceFileStream = getClass.getResourceAsStream(resourcePath)
+    Files.createDirectories(outPath.getParent)
+    Files.copy(resourceFileStream, outPath, StandardCopyOption.REPLACE_EXISTING)
+    val ret = s"file://${outPath.toUri.getPath}"
+    println(ret)
+    ret
+  }
 }
