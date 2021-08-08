@@ -4,6 +4,7 @@ import com.sparrowrecsys.online.util.Config;
 import com.sparrowrecsys.online.util.Utility;
 
 import java.io.File;
+import java.sql.Connection;
 import java.util.*;
 
 /**
@@ -17,6 +18,9 @@ public class DataManager {
     HashMap<Integer, User> userMap;
     //genre reverse index for quick querying all movies in a genre
     HashMap<String, List<Movie>> genreReverseIndexMap;
+
+    private int currentMaxMovieId = 0;
+    private int currentMaxUserId = 0;
 
     private DataManager(){
         this.movieMap = new HashMap<>();
@@ -38,15 +42,27 @@ public class DataManager {
 
     //load data from file system including movie, rating, link data and model data like embedding vectors.
     public void loadData(String movieDataPath, String linkDataPath, String ratingDataPath, String movieEmbPath, String userEmbPath, String movieRedisKey, String userRedisKey) throws Exception{
-        loadMovieData(movieDataPath);
-        loadLinkData(linkDataPath);
-        loadRatingData(ratingDataPath);
-        loadMovieEmb(movieEmbPath, movieRedisKey);
-        if (Config.IS_LOAD_ITEM_FEATURE_FROM_REDIS){
-            loadMovieFeatures("mf:");
+        Connection conn = DatabaseManager.getDBConnection();
+        if (!DatabaseManager.loadMoviesFromDB(conn, this)) {
+            loadMovieData(movieDataPath);
         }
+        if (!DatabaseManager.loadRatingsFromDB(conn, this)) {
+            loadRatingData(ratingDataPath);
+        }
+        DatabaseManager.closeDBConnection(conn);
 
-        loadUserEmb(userEmbPath, userRedisKey);
+        loadLinkData(linkDataPath);
+
+        // Below features will be from online services instead of files
+//        loadMovieEmb(movieEmbPath, movieRedisKey);
+//        if (Config.IS_LOAD_ITEM_FEATURE_FROM_REDIS){
+//            loadMovieFeatures("mf:");
+//        }
+//
+//        loadUserEmb(userEmbPath, userRedisKey);
+
+        currentMaxMovieId = this.movieMap.keySet().stream().mapToInt(v -> v).max().orElse(0);
+        currentMaxUserId = this.userMap.keySet().stream().mapToInt(v -> v).max().orElse(0);
     }
 
     //load movie data from movies.csv
@@ -164,7 +180,7 @@ public class DataManager {
     }
 
     //parse release year
-    private int parseReleaseYear(String rawTitle){
+    protected int parseReleaseYear(String rawTitle){
         if (null == rawTitle || rawTitle.trim().length() < 6){
             return -1;
         }else{
@@ -242,7 +258,7 @@ public class DataManager {
     }
 
     //add movie to genre reversed index
-    private void addMovie2GenreIndex(String genre, Movie movie){
+    protected void addMovie2GenreIndex(String genre, Movie movie){
         if (!this.genreReverseIndexMap.containsKey(genre)){
             this.genreReverseIndexMap.put(genre, new ArrayList<>());
         }
@@ -290,5 +306,72 @@ public class DataManager {
     //get user object by user id
     public User getUserById(int userId){
         return this.userMap.get(userId);
+    }
+
+    public int addNewMovie(String title, String genres) {
+        int movieId = ++currentMaxMovieId;
+
+        // save to DB
+        Connection conn = DatabaseManager.getDBConnection();
+        DatabaseManager.insertNewMovie(conn, (long) movieId, title, genres);
+        DatabaseManager.closeDBConnection(conn);
+
+        // save to memory
+        Movie movie = new Movie();
+        movie.setMovieId(movieId);
+        int releaseYear = parseReleaseYear(title.trim());
+        if (releaseYear == -1){
+            movie.setTitle(title.trim());
+        }else{
+            movie.setReleaseYear(releaseYear);
+            movie.setTitle(title.trim().substring(0, title.trim().length()-6).trim());
+        }
+        if (!genres.trim().isEmpty()){
+            String[] genreArray = genres.split("\\|");
+            for (String genre : genreArray){
+                movie.addGenre(genre);
+                addMovie2GenreIndex(genre, movie);
+            }
+        }
+        this.movieMap.put(movie.getMovieId(), movie);
+
+        // send kafka message
+        KafkaMessaging.sendNewMovie(movie);
+
+        return movieId;
+    }
+
+    public Rating addNewRating(int userId, int movieId, float score) {
+        long time = System.currentTimeMillis() / 1000;
+
+        // save to DB
+        Connection conn = DatabaseManager.getDBConnection();
+        DatabaseManager.insertNewRating(conn, (long) userId, (long) movieId, score, time);
+        DatabaseManager.closeDBConnection(conn);
+
+        // save to memory
+        Rating rating = new Rating();
+        rating.setUserId(userId);
+        rating.setMovieId(movieId);
+        rating.setScore(score);
+        rating.setTimestamp(time);
+        Movie movie = this.movieMap.get(rating.getMovieId());
+        if (null != movie){
+            movie.addRating(rating);
+        }
+
+        // add user if needed
+        if (!this.userMap.containsKey(rating.getUserId())){
+            User user = new User();
+            user.setUserId(rating.getUserId());
+            this.userMap.put(user.getUserId(), user);
+        }
+
+        this.userMap.get(rating.getUserId()).addRating(rating);
+
+        // send kafka message
+        KafkaMessaging.sendNewRating(rating);
+
+        return rating;
     }
 }

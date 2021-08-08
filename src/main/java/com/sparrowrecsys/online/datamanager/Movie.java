@@ -91,13 +91,42 @@ public class Movie {
     }
 
     public void addRating(Rating rating) {
-        averageRating = (averageRating * ratingNumber + rating.getScore()) / (ratingNumber+1);
-        ratingNumber++;
-        this.ratings.add(rating);
+        // check exist
+        Rating existedOne = null;
+        for (Rating r: this.ratings) {
+            if (r.userId == rating.userId && r.movieId == rating.movieId) {
+                existedOne = r;
+                break;
+            }
+        }
+
+        if (existedOne != null) {
+            averageRating = (averageRating * ratingNumber - existedOne.getScore() + rating.getScore()) / ratingNumber;
+            existedOne.setScore(rating.getScore());
+            existedOne.setTimestamp(rating.getTimestamp());
+        } else {
+            this.ratings.add(rating);
+            averageRating = (averageRating * ratingNumber + rating.getScore()) / (ratingNumber+1);
+            ratingNumber++;
+        }
         addTopRating(rating);
     }
 
     public void addTopRating(Rating rating){
+        // remove existing one first
+        int exitingIndex = -1;
+        for (int i = 0; i < this.topRatings.size(); i++) {
+            Rating r = this.topRatings.get(i);
+            if (r.userId == rating.userId && r.movieId == rating.movieId) {
+                exitingIndex = i;
+                break;
+            }
+        }
+        if (exitingIndex != -1) {
+            this.topRatings.remove(exitingIndex);
+        }
+
+        // insert
         if (this.topRatings.isEmpty()){
             this.topRatings.add(rating);
         }else{

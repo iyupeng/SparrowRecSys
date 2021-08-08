@@ -10,4 +10,21 @@ public class Config {
 
     public static boolean IS_ENABLE_AB_TEST = false;
 
+    public static String KAFKA_BROKER_SERVERS = "localhost:9092";
+    public static String HDFS_PATH_ALL_MOVIES = "hdfs:///sparrow_recsys/movies/";
+    public static String HDFS_PATH_ALL_RATINGS = "hdfs:///sparrow_recsys/ratings/";
+
+    public static String HDFS_PATH_ALL_MOVIE_EMBEDDINGS = "hdfs:///sparrow_recsys/movie-embeddings/";
+
+    public static String REDIS_KEY_USER_EMBEDDING_VERSION="sparrow_recsys:version:ue";
+    public static String REDIS_KEY_PREFIX_USER_EMBEDDING="sparrow_recsys:ue";
+
+    public static String REDIS_KEY_LSH_MOVIE_BUCKETS_VERSION="sparrow_recsys:version:lsh_movie_buckets";
+    public static String REDIS_KEY_PREFIX_LSH_MOVIE_BUCKETS="sparrow_recsys:lsh_movie_buckets";
+
+    public static String REDIS_KEY_LSH_USER_BUCKETS_VERSION="sparrow_recsys:version:lsh_user_buckets";
+    public static String REDIS_KEY_PREFIX_LSH_USER_BUCKETS="sparrow_recsys:lsh_user_buckets";
+
+    public static String REDIS_KEY_LSH_BUCKET_MOVIES_VERSION="sparrow_recsys:version:lsh_bucket_movies";
+    public static String REDIS_KEY_PREFIX_LSH_BUCKET_MOVIES="sparrow_recsys:lsh_bucket_movies";
 }
