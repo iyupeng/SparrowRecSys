@@ -8,7 +8,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.sql.expressions.{UserDefinedFunction, Window}
 import org.apache.spark.sql.functions.{format_number, _}
 import org.apache.spark.sql.types.{DecimalType, FloatType, IntegerType, LongType}
-import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
+import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import redis.clients.jedis.Jedis
 import redis.clients.jedis.params.SetParams
 
@@ -18,8 +18,8 @@ import scala.collection.{JavaConversions, mutable}
 object FeatureEngForRecModel {
 
   val NUMBER_PRECISION = 2
-  val redisEndpoint = "localhost"
-  val redisPort = 6379
+  val redisEndpoint: String = Config.REDIS_SERVER
+  val redisPort: Int = Config.REDIS_PORT
 
   def addSampleLabel(ratingSamples:DataFrame): DataFrame ={
     ratingSamples.show(10, truncate = false)
@@ -42,12 +42,22 @@ object FeatureEngForRecModel {
       }
       else {
         val yearString = title.trim.substring(title.length - 5, title.length - 1)
-        yearString.toInt
+        try {
+          yearString.toInt
+        } catch {
+          case _: Throwable => 1990 // default value
+        }
       }
     }})
 
     //add title
-    val extractTitleUdf = udf({(title: String) => {title.trim.substring(0, title.trim.length - 6).trim}})
+    val extractTitleUdf = udf({(title: String) => {
+      val reg = ".*\\(\\d{4}\\)$".r
+      title.trim match {
+        case reg() => title.trim.substring(0, title.trim.length - 6).trim
+        case _ => title.trim
+      }
+    }})
 
     val samplesWithMovies2 = samplesWithMovies1.withColumn("releaseYear", extractReleaseYearUdf(col("title")))
       .withColumn("title", extractTitleUdf(col("title")))
@@ -86,6 +96,18 @@ object FeatureEngForRecModel {
     sortedGenres.keys.toSeq
   }}
 
+  val extractGenresCount: UserDefinedFunction = udf { (genreArray: Seq[String]) => {
+    val genreMap = mutable.Map[String, Int]()
+    genreArray.foreach((element:String) => {
+      val genres = element.split("\\|")
+      genres.foreach((oneGenre:String) => {
+        genreMap(oneGenre) = genreMap.getOrElse[Int](oneGenre, 0)  + 1
+      })
+    })
+    val sortedGenres = ListMap(genreMap.toSeq.sortWith(_._2 > _._2):_*)
+    sortedGenres.values.toSeq
+  }}
+
   def addUserFeatures(ratingSamples:DataFrame): DataFrame ={
     val samplesWithUserFeatures = ratingSamples
       .withColumn("userPositiveHistory", collect_list(when(col("label") === 1, col("movieId")).otherwise(lit(null)))
@@ -115,6 +137,14 @@ object FeatureEngForRecModel {
       .withColumn("userGenres", extractGenres(collect_list(when(col("label") === 1, col("genres")).otherwise(lit(null)))
         .over(Window.partitionBy("userId")
           .orderBy(col("timestamp")).rowsBetween(-100, -1))))
+      .withColumn("userGenresCount", extractGenresCount(collect_list(when(col("label") === 1, col("genres")).otherwise(lit(null)))
+        .over(Window.partitionBy("userId")
+          .orderBy(col("timestamp")).rowsBetween(-100, -1))))
+      .withColumn("userGenreCount1",col("userGenresCount").getItem(0))
+      .withColumn("userGenreCount2",col("userGenresCount").getItem(1))
+      .withColumn("userGenreCount3",col("userGenresCount").getItem(2))
+      .withColumn("userGenreCount4",col("userGenresCount").getItem(3))
+      .withColumn("userGenreCount5",col("userGenresCount").getItem(4))
       .na.fill(0)
       .withColumn("userRatingStddev",format_number(col("userRatingStddev"), NUMBER_PRECISION))
       .withColumn("userReleaseYearStddev",format_number(col("userReleaseYearStddev"), NUMBER_PRECISION))
@@ -123,7 +153,7 @@ object FeatureEngForRecModel {
       .withColumn("userGenre3",col("userGenres").getItem(2))
       .withColumn("userGenre4",col("userGenres").getItem(3))
       .withColumn("userGenre5",col("userGenres").getItem(4))
-      .drop("genres", "userGenres", "userPositiveHistory")
+      .drop("genres", "userGenres", "userGenresCount", "userPositiveHistory")
       .filter(col("userRatingCount") > 1)
 
     samplesWithUserFeatures.printSchema()
@@ -180,7 +210,7 @@ object FeatureEngForRecModel {
 
   def splitAndSaveTrainingTestSamples(samples:DataFrame, savePath:String): Unit ={
     //generate a smaller sample set for demo
-    val smallSamples = samples.sample(0.1)
+    val smallSamples = samples.sample(0.5)
 
     //split training and test set by 8:2
     val Array(training, test) = smallSamples.randomSplit(Array(0.8, 0.2))
@@ -217,7 +247,8 @@ object FeatureEngForRecModel {
       .filter(col("userRowNum") === 1)
       .select("userId","userRatedMovie1", "userRatedMovie2","userRatedMovie3","userRatedMovie4","userRatedMovie5",
         "userRatingCount", "userAvgReleaseYear", "userReleaseYearStddev", "userAvgRating", "userRatingStddev",
-        "userGenre1", "userGenre2","userGenre3","userGenre4","userGenre5")
+        "userGenre1", "userGenre2","userGenre3","userGenre4","userGenre5",
+        "userGenreCount1", "userGenreCount2","userGenreCount3","userGenreCount4","userGenreCount5")
       .na.fill("")
 
     userLatestSamples.printSchema()
@@ -247,6 +278,11 @@ object FeatureEngForRecModel {
       valueMap("userGenre3") = sample.getAs[String]("userGenre3")
       valueMap("userGenre4") = sample.getAs[String]("userGenre4")
       valueMap("userGenre5") = sample.getAs[String]("userGenre5")
+      valueMap("userGenreCount1") = sample.getAs[Int]("userGenreCount1").toString
+      valueMap("userGenreCount2") = sample.getAs[Int]("userGenreCount2").toString
+      valueMap("userGenreCount3") = sample.getAs[Int]("userGenreCount3").toString
+      valueMap("userGenreCount4") = sample.getAs[Int]("userGenreCount4").toString
+      valueMap("userGenreCount5") = sample.getAs[Int]("userGenreCount5").toString
       valueMap("userRatingCount") = sample.getAs[Long]("userRatingCount").toString
       valueMap("userAvgReleaseYear") = sample.getAs[Int]("userAvgReleaseYear").toString
       valueMap("userReleaseYearStddev") = sample.getAs[String]("userReleaseYearStddev")
@@ -279,15 +315,16 @@ object FeatureEngForRecModel {
     ratingSamplesWithLabel.show(10, truncate = false)
 
     val samplesWithMovieFeatures = addMovieFeatures(movieSamples, ratingSamplesWithLabel)
-    val samplesWithUserFeatures = addUserFeatures(samplesWithMovieFeatures)
+    //save item features to redis for online inference
+    extractAndSaveMovieFeaturesToRedis(samplesWithMovieFeatures)
 
+    val samplesWithUserFeatures = addUserFeatures(samplesWithMovieFeatures)
+    //save user features to redis for online inference
+    extractAndSaveUserFeaturesToRedis(samplesWithUserFeatures)
 
     //save samples as csv format
     splitAndSaveTrainingTestSamples(samplesWithUserFeatures, Config.HDFS_PATH_SAMPLE_DATA)
 
-    //save user features and item features to redis for online inference
-    extractAndSaveUserFeaturesToRedis(samplesWithUserFeatures)
-    extractAndSaveMovieFeaturesToRedis(samplesWithUserFeatures)
     spark.close()
   }
 
@@ -327,7 +364,15 @@ object FeatureEngForRecModel {
         .filter(_.nonEmpty)
         .map(_.get)
 
-    val df = spark.createDataFrame(data).toDF("userId", "movieId", "rating", "timestamp")
+    val df = spark.createDataFrame(data)
+      .toDF("userId", "movieId", "rating", "timestamp")
+      .withColumn("userMovieRowNum", row_number()
+        .over(Window.partitionBy("userId", "movieId")
+          .orderBy(col("timestamp").desc)))
+      .filter(col("userMovieRowNum") === 1)
+      .drop("userMovieRowNum")
+      .orderBy("timestamp")
+
     println("user ratings schema:")
     df.printSchema()
     df

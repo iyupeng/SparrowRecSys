@@ -10,6 +10,13 @@ public class Config {
 
     public static boolean IS_ENABLE_AB_TEST = false;
 
+    public static String MYSQL_DB_CONNECTION_URL =
+            "jdbc:mysql://localhost:3306/sparrow_recsys?" +
+            "user=sparrow&password=Recsys1$&autoReconnect=true";
+
+    public static String REDIS_SERVER = "localhost";
+    public static int REDIS_PORT = 6379;
+
     public static String KAFKA_BROKER_SERVERS = "localhost:9092";
     public static String HDFS_PATH_ALL_MOVIES = "hdfs:///sparrow_recsys/movies/";
     public static String HDFS_PATH_ALL_RATINGS = "hdfs:///sparrow_recsys/ratings/";

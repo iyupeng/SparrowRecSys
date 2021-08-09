@@ -25,7 +25,10 @@ public class KafkaMessaging {
     public static void sendNewMovie(Movie movie) {
         Producer<String, String> producer = getProducer();
 
-        String message = String.format("%d\t%s\t%s", movie.getMovieId(), movie.getTitle(), String.join("|", movie.getGenres()));
+        String message = String.format("%d\t%s\t%s",
+                movie.getMovieId(),
+                movie.getTitle() + " (" + movie.getReleaseYear() + ")",
+                String.join("|", movie.getGenres()));
         producer.send(new ProducerRecord<>(NEW_MOVIE_TOPIC_NAME, String.valueOf(movie.getMovieId()), message));
         System.out.println("new movie sent to kafka.");
 

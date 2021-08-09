@@ -1,5 +1,7 @@
 package com.sparrowrecsys.online.datamanager;
 
+import com.sparrowrecsys.online.util.Config;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -25,9 +27,7 @@ public class DatabaseManager {
     public static Connection getDBConnection() {
         Connection conn = null;
         try {
-            conn =
-                    DriverManager.getConnection("jdbc:mysql://localhost:3306/sparrow_recsys?" +
-                            "user=sparrow&password=Recsys1$");
+            conn = DriverManager.getConnection(Config.MYSQL_DB_CONNECTION_URL);
 
         } catch (SQLException ex) {
             // handle any errors
