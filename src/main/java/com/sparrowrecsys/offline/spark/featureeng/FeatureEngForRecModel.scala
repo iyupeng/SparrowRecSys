@@ -2,6 +2,7 @@ package com.sparrowrecsys.offline.spark.featureeng
 
 import java.nio.file.{Files, Paths, StandardCopyOption}
 
+import com.sparrowrecsys.online.util.Config
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.expressions.{UserDefinedFunction, Window}
@@ -141,9 +142,9 @@ object FeatureEngForRecModel {
       .na.fill("")
 
     movieLatestSamples.printSchema()
-    movieLatestSamples.show(100, truncate = false)
+    movieLatestSamples.show(20, truncate = false)
 
-    val movieFeaturePrefix = "mf:"
+    val movieFeaturePrefix = Config.REDIS_KEY_PREFIX_MOVIE_FEATURE
 
     val redisClient = new Jedis(redisEndpoint, redisPort)
     val params = SetParams.setParams()
@@ -151,10 +152,11 @@ object FeatureEngForRecModel {
     params.ex(60 * 60 * 24 * 30)
     val sampleArray = movieLatestSamples.collect()
     println("total movie size:" + sampleArray.length)
+
     var insertedMovieNumber = 0
     val movieCount = sampleArray.length
     for (sample <- sampleArray){
-      val movieKey = movieFeaturePrefix + sample.getAs[String]("movieId")
+      val movieKey = movieFeaturePrefix + ":" + sample.getAs[String]("movieId")
       val valueMap = mutable.Map[String, String]()
       valueMap("movieGenre1") = sample.getAs[String]("movieGenre1")
       valueMap("movieGenre2") = sample.getAs[String]("movieGenre2")
@@ -164,7 +166,8 @@ object FeatureEngForRecModel {
       valueMap("movieAvgRating") = sample.getAs[String]("movieAvgRating")
       valueMap("movieRatingStddev") = sample.getAs[String]("movieRatingStddev")
 
-      redisClient.hset(movieKey, JavaConversions.mapAsJavaMap(valueMap))
+      val map = JavaConversions.mapAsJavaMap(valueMap)
+      redisClient.hmset(movieKey, map)
       insertedMovieNumber += 1
       if (insertedMovieNumber % 100 ==0){
         println(insertedMovieNumber + "/" + movieCount + "...")
@@ -175,7 +178,7 @@ object FeatureEngForRecModel {
     movieLatestSamples
   }
 
-  def splitAndSaveTrainingTestSamples(samples:DataFrame, savePath:String)={
+  def splitAndSaveTrainingTestSamples(samples:DataFrame, savePath:String): Unit ={
     //generate a smaller sample set for demo
     val smallSamples = samples.sample(0.1)
 
@@ -184,12 +187,12 @@ object FeatureEngForRecModel {
 
     val sampleResourcesPath = this.getClass.getResource(savePath)
     training.repartition(1).write.option("header", "true").mode(SaveMode.Overwrite)
-      .csv(savePath+"/trainingSamples")
+      .csv(savePath+"/trainingSamples/0000")
     test.repartition(1).write.option("header", "true").mode(SaveMode.Overwrite)
-      .csv(savePath+"/testSamples")
+      .csv(savePath+"/testSamples/0000")
   }
 
-  def splitAndSaveTrainingTestSamplesByTimeStamp(samples:DataFrame, savePath:String)={
+  def splitAndSaveTrainingTestSamplesByTimeStamp(samples:DataFrame, savePath:String): Unit ={
     //generate a smaller sample set for demo
     val smallSamples = samples.sample(0.1).withColumn("timestampLong", col("timestamp").cast(LongType))
 
@@ -218,9 +221,9 @@ object FeatureEngForRecModel {
       .na.fill("")
 
     userLatestSamples.printSchema()
-    userLatestSamples.show(100, truncate = false)
+    userLatestSamples.show(20, truncate = false)
 
-    val userFeaturePrefix = "uf:"
+    val userFeaturePrefix = Config.REDIS_KEY_PREFIX_USER_FEATURE
 
     val redisClient = new Jedis(redisEndpoint, redisPort)
     val params = SetParams.setParams()
@@ -228,10 +231,11 @@ object FeatureEngForRecModel {
     params.ex(60 * 60 * 24 * 30)
     val sampleArray = userLatestSamples.collect()
     println("total user size:" + sampleArray.length)
+
     var insertedUserNumber = 0
     val userCount = sampleArray.length
     for (sample <- sampleArray){
-      val userKey = userFeaturePrefix + sample.getAs[String]("userId")
+      val userKey = userFeaturePrefix + ":" + sample.getAs[String]("userId")
       val valueMap = mutable.Map[String, String]()
       valueMap("userRatedMovie1") = sample.getAs[String]("userRatedMovie1")
       valueMap("userRatedMovie2") = sample.getAs[String]("userRatedMovie2")
@@ -249,7 +253,8 @@ object FeatureEngForRecModel {
       valueMap("userAvgRating") = sample.getAs[String]("userAvgRating")
       valueMap("userRatingStddev") = sample.getAs[String]("userRatingStddev")
 
-      redisClient.hset(userKey, JavaConversions.mapAsJavaMap(valueMap))
+      val map = JavaConversions.mapAsJavaMap(valueMap)
+      redisClient.hmset(userKey, map)
       insertedUserNumber += 1
       if (insertedUserNumber % 100 ==0){
         println(insertedUserNumber + "/" + userCount + "...")
@@ -264,16 +269,11 @@ object FeatureEngForRecModel {
     Logger.getLogger("org").setLevel(Level.ERROR)
 
     val conf = new SparkConf()
-      .setMaster("local")
-      .setAppName("featureEngineering")
-      .set("spark.submit.deployMode", "client")
+      .setAppName("FeatureEngineering")
 
     val spark = SparkSession.builder.config(conf).getOrCreate()
-    val movieResourcesPath = this.getClass.getResource("/webroot/sampledata/movies.csv")
-    val movieSamples = spark.read.format("csv").option("header", "true").load(resourceToLocal("/webroot/sampledata/movies.csv"))
-
-    val ratingsResourcesPath = this.getClass.getResource("/webroot/sampledata/ratings.csv")
-    val ratingSamples = spark.read.format("csv").option("header", "true").load(resourceToLocal("/webroot/sampledata/ratings.csv"))
+    val movieSamples = loadMoviesFromHDFS(spark)
+    val ratingSamples = loadRatingsFromHDFS(spark)
 
     val ratingSamplesWithLabel = addSampleLabel(ratingSamples)
     ratingSamplesWithLabel.show(10, truncate = false)
@@ -283,12 +283,54 @@ object FeatureEngForRecModel {
 
 
     //save samples as csv format
-    splitAndSaveTrainingTestSamples(samplesWithUserFeatures, "file:///tmp/webroot/sampledata")
+    splitAndSaveTrainingTestSamples(samplesWithUserFeatures, Config.HDFS_PATH_SAMPLE_DATA)
 
     //save user features and item features to redis for online inference
-    //extractAndSaveUserFeaturesToRedis(samplesWithUserFeatures)
-    //extractAndSaveMovieFeaturesToRedis(samplesWithUserFeatures)
+    extractAndSaveUserFeaturesToRedis(samplesWithUserFeatures)
+    extractAndSaveMovieFeaturesToRedis(samplesWithUserFeatures)
     spark.close()
+  }
+
+  def loadMoviesFromHDFS(spark: SparkSession): DataFrame = {
+    val file = spark.sparkContext.textFile(Config.HDFS_PATH_ALL_MOVIES + "*/part-*")
+
+    val data =
+      file
+        .map{ line =>
+          val fields = line.split("\t")
+          if (fields.length == 3)
+            Some((fields(0), fields(1), fields(2)))
+          else
+            None
+        }
+        .filter(_.nonEmpty)
+        .map(_.get)
+
+    val df = spark.createDataFrame(data).toDF("movieId", "title", "genres")
+    println("movies schema:")
+    df.printSchema()
+    df
+  }
+
+  def loadRatingsFromHDFS(spark: SparkSession): DataFrame = {
+    val file = spark.sparkContext.textFile(Config.HDFS_PATH_ALL_RATINGS + "*/part-*")
+
+    val data =
+      file
+        .map{ line =>
+          val fields = line.split("\t")
+          if (fields.length == 4)
+            Some((fields(0), fields(1), fields(2), fields(3)))
+          else
+            None
+        }
+        .filter(_.nonEmpty)
+        .map(_.get)
+
+    val df = spark.createDataFrame(data).toDF("userId", "movieId", "rating", "timestamp")
+    println("user ratings schema:")
+    df.printSchema()
+    df
   }
 
   def resourceToLocal(resourcePath: String): String = {

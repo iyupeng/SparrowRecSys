@@ -48,6 +48,7 @@ object EmbeddingLSH {
     saveUserEmbeddingLSHToRedis(spark, movieUserEmbeddingLSH, version)
     saveMovieEmbeddingLSHToRedis(spark, movieUserEmbeddingLSH, version)
     saveLSHBucketMoviesToRedis(spark, movieUserEmbeddingLSH, version)
+    updateEmbeddingVersions(version)
   }
 
   def loadMovieEmbeddingsFromHDFS(spark: SparkSession): DataFrame = {
@@ -122,9 +123,6 @@ object EmbeddingLSH {
         RedisClient.getInstance().mset(keyValues: _*)
       }
     )
-
-    // update version
-    RedisClient.getInstance().set(Config.REDIS_KEY_USER_EMBEDDING_VERSION, version)
   }
 
   def unionMovieAndUserEmbeddings(movieEmb: DataFrame, userEmb: DataFrame): DataFrame = {
@@ -166,9 +164,6 @@ object EmbeddingLSH {
       version,
       "userId",
       Config.REDIS_KEY_PREFIX_LSH_USER_BUCKETS)
-
-    // update version
-    RedisClient.getInstance().set(Config.REDIS_KEY_LSH_USER_BUCKETS_VERSION, version)
   }
 
   def saveMovieEmbeddingLSHToRedis(spark:SparkSession, movieUserEmbeddingLSH: DataFrame, version: String): Unit = {
@@ -178,9 +173,6 @@ object EmbeddingLSH {
       version,
       "movieId",
       Config.REDIS_KEY_PREFIX_LSH_MOVIE_BUCKETS)
-
-    // update version
-    RedisClient.getInstance().set(Config.REDIS_KEY_LSH_MOVIE_BUCKETS_VERSION, version)
   }
 
   def saveEmbeddingLSHBucketsToRedis(spark:SparkSession,
@@ -240,8 +232,16 @@ object EmbeddingLSH {
         }
       }
     )
+  }
 
+  def updateEmbeddingVersions(version: String): Unit = {
     // update version
+    RedisClient.getInstance().set(Config.REDIS_KEY_USER_EMBEDDING_VERSION, version)
+
+    RedisClient.getInstance().set(Config.REDIS_KEY_LSH_MOVIE_BUCKETS_VERSION, version)
+
+    RedisClient.getInstance().set(Config.REDIS_KEY_LSH_USER_BUCKETS_VERSION, version)
+
     RedisClient.getInstance().set(Config.REDIS_KEY_LSH_BUCKET_MOVIES_VERSION, version)
   }
 }

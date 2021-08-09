@@ -1,14 +1,26 @@
+
+import os
+import subprocess
+import shutil
+from time import localtime, strftime
+import redis
+
 import tensorflow as tf
 
-# # Training samples path, change to your local path
-# training_samples_file_path = tf.keras.utils.get_file("trainingSamples.csv",
-#                                                      "file:///Users/zhewang/Workspace/SparrowRecSys/src/main"
-#                                                      "/resources/webroot/sampledata/trainingSamples.csv")
-# # Test samples path, change to your local path
-# test_samples_file_path = tf.keras.utils.get_file("testSamples.csv",
-#                                                  "file:///Users/zhewang/Workspace/SparrowRecSys/src/main"
-#                                                  "/resources/webroot/sampledata/testSamples.csv")
+HDFS_PATH_SAMPLE_DATA = "hdfs:///sparrow_recsys/sampledata/"
+HDFS_PATH_MODEL_DATA = "hdfs:///sparrow_recsys/modeldata/"
+REDIS_SERVER="localhost"
+REDIS_PORT=6379
+REDIS_KEY_VERSION_MODEL_WIDE_DEEP = "sparrow_recsys:version:model_wd"
 
+# download sampling data from HDFS
+tmp_sample_dir = "tmp_sampledata"
+tmp_model_dir = "tmp_model"
+
+if os.path.exists(tmp_sample_dir):
+    shutil.rmtree(tmp_sample_dir)
+
+subprocess.Popen(["hadoop", "fs", "-get", HDFS_PATH_SAMPLE_DATA, tmp_sample_dir], stdout=subprocess.PIPE).communicate()
 
 # load sample as tf dataset
 def get_dataset(file_path):
@@ -23,8 +35,8 @@ def get_dataset(file_path):
 
 
 # split as test dataset and training dataset
-train_dataset = get_dataset("/tmp/webroot/sampledata/trainingSamples/*.csv")
-test_dataset = get_dataset("/tmp/webroot/sampledata/testSamples/*.csv")
+train_dataset = get_dataset(f"{tmp_sample_dir}/trainingSamples/*/part-*.csv")
+test_dataset = get_dataset(f"{tmp_sample_dir}/testSamples/*/part-*.csv")
 
 # genre features vocabulary
 genre_vocab = ['Film-Noir', 'Action', 'Adventure', 'Horror', 'Romance', 'War', 'Comedy', 'Western', 'Documentary',
@@ -49,8 +61,9 @@ for feature, vocab in GENRE_FEATURES.items():
         key=feature, vocabulary_list=vocab)
     emb_col = tf.feature_column.embedding_column(cat_col, 10)
     categorical_columns.append(emb_col)
+
 # movie id embedding feature
-movie_col = tf.feature_column.categorical_column_with_identity(key='movieId', num_buckets=1001)
+movie_col = tf.feature_column.categorical_column_with_identity(key='movieId', num_buckets=2001)
 movie_emb_col = tf.feature_column.embedding_column(movie_col, 10)
 categorical_columns.append(movie_emb_col)
 
@@ -69,7 +82,7 @@ numerical_columns = [tf.feature_column.numeric_column('releaseYear'),
                      tf.feature_column.numeric_column('userRatingStddev')]
 
 # cross feature between current movie and user historical movie
-rated_movie = tf.feature_column.categorical_column_with_identity(key='userRatedMovie1', num_buckets=1001)
+rated_movie = tf.feature_column.categorical_column_with_identity(key='userRatedMovie1', num_buckets=2001)
 crossed_feature = tf.feature_column.indicator_column(tf.feature_column.crossed_column([movie_col, rated_movie], 10000))
 
 # define input for keras model
@@ -114,7 +127,7 @@ model.compile(
     metrics=['accuracy', tf.keras.metrics.AUC(curve='ROC'), tf.keras.metrics.AUC(curve='PR')])
 
 # train the model
-model.fit(train_dataset, epochs=5)
+model.fit(train_dataset, epochs=20)
 
 model.summary()
 
@@ -129,3 +142,28 @@ for prediction, goodRating in zip(predictions[:12], list(test_dataset)[0][1][:12
     print("Predicted good rating: {:.2%}".format(prediction[0]),
           " | Actual rating label: ",
           ("Good Rating" if bool(goodRating) else "Bad Rating"))
+
+# save model
+version=strftime("%Y%m%d%H%M%S", localtime())
+print(f"Saving model with version: {version}")
+
+tf.keras.models.save_model(
+    model,
+    f"{tmp_model_dir}/widendeep/{version}",
+    overwrite=True,
+    include_optimizer=True,
+    save_format=None,
+    signatures=None,
+    options=None
+)
+
+if os.path.exists(f"{tmp_model_dir}/widendeep/{version}"):
+    subprocess.Popen(["hadoop", "fs", "-rm", "-r", f"{HDFS_PATH_MODEL_DATA}widendeep/{version}"], stdout=subprocess.PIPE).communicate()
+    subprocess.Popen(["hadoop", "fs", "-mkdir", "-p", f"{HDFS_PATH_MODEL_DATA}widendeep/"], stdout=subprocess.PIPE).communicate()
+    subprocess.Popen(["hadoop", "fs", "-put", f"{tmp_model_dir}/widendeep/{version}", f"{HDFS_PATH_MODEL_DATA}widendeep/"], stdout=subprocess.PIPE).communicate()
+    print(f"WideNDeep model data is uploaded to HDFS: {HDFS_PATH_MODEL_DATA}widendeep/{version}")
+
+    # update model version in redis
+    r = redis.Redis(host=REDIS_SERVER, port=REDIS_PORT)
+    r.set(REDIS_KEY_VERSION_MODEL_WIDE_DEEP, version)
+
