@@ -4,6 +4,7 @@ import subprocess
 import shutil
 from time import localtime, strftime
 import redis
+import json
 
 import tensorflow as tf
 
@@ -33,10 +34,6 @@ def get_dataset(file_path):
         ignore_errors=True)
     return dataset
 
-
-# split as test dataset and training dataset
-train_dataset = get_dataset(f"{tmp_sample_dir}/trainingSamples/*/part-*.csv")
-test_dataset = get_dataset(f"{tmp_sample_dir}/testSamples/*/part-*.csv")
 
 # genre features vocabulary
 genre_vocab = ['Film-Noir', 'Action', 'Adventure', 'Horror', 'Romance', 'War', 'Comedy', 'Western', 'Documentary',
@@ -109,32 +106,77 @@ inputs = {
     'movieGenre3': tf.keras.layers.Input(name='movieGenre3', shape=(), dtype='string'),
 }
 
-# wide and deep model architecture
-# deep part for all input features
-deep = tf.keras.layers.DenseFeatures(numerical_columns + categorical_columns)(inputs)
-deep = tf.keras.layers.Dense(128, activation='relu')(deep)
-deep = tf.keras.layers.Dense(128, activation='relu')(deep)
-# wide part for cross feature
-wide = tf.keras.layers.DenseFeatures(crossed_feature)(inputs)
-both = tf.keras.layers.concatenate([deep, wide])
-output_layer = tf.keras.layers.Dense(1, activation='sigmoid')(both)
-model = tf.keras.Model(inputs, output_layer)
+# train model with parameter servers
+num_ps = len(json.loads(os.environ["TF_CONFIG"])['cluster']['ps'])
+print(f"parameter server count: {num_ps}")
 
-# compile the model, set loss function, optimizer and evaluation metrics
-model.compile(
-    loss='binary_crossentropy',
-    optimizer='adam',
-    metrics=['accuracy', tf.keras.metrics.AUC(curve='ROC'), tf.keras.metrics.AUC(curve='PR')])
+cluster_resolver = tf.distribute.cluster_resolver.TFConfigClusterResolver()
+
+variable_partitioner = (
+    tf.distribute.experimental.partitioners.MinSizePartitioner(
+        min_shard_bytes=(256 << 10),
+        max_shards=num_ps))
+
+strategy = tf.distribute.experimental.ParameterServerStrategy(
+    cluster_resolver,
+    variable_partitioner=variable_partitioner)
+
+def dataset_fn(input_context):
+    train_dataset = get_dataset(f"{tmp_sample_dir}/trainingSamples/*/part-*.csv")
+    dataset = train_dataset
+    dataset = dataset.repeat().shard(
+        input_context.num_input_pipelines,
+        input_context.input_pipeline_id)
+
+    return dataset
+
+dc = tf.keras.utils.experimental.DatasetCreator(dataset_fn)
+
+with strategy.scope():
+    # wide and deep model architecture
+    # deep part for all input features
+    deep = tf.keras.layers.DenseFeatures(numerical_columns + categorical_columns)(inputs)
+    deep = tf.keras.layers.Dense(128, activation='relu')(deep)
+    deep = tf.keras.layers.Dense(128, activation='relu')(deep)
+    # wide part for cross feature
+    wide = tf.keras.layers.DenseFeatures(crossed_feature)(inputs)
+    both = tf.keras.layers.concatenate([deep, wide])
+    output_layer = tf.keras.layers.Dense(1, activation='sigmoid')(both)
+
+    model = tf.keras.Model(inputs, output_layer)
+
+    # compile the model, set loss function, optimizer and evaluation metrics
+    model.compile(
+        loss='binary_crossentropy',
+        optimizer='adam',
+        metrics=['accuracy', tf.keras.metrics.AUC(curve='ROC'), tf.keras.metrics.AUC(curve='PR')])
 
 # train the model
-model.fit(train_dataset, epochs=20)
+working_dir = '/tmp/my_working_dir'
+log_dir = os.path.join(working_dir, 'log')
+ckpt_filepath = os.path.join(working_dir, 'ckpt')
+backup_dir = os.path.join(working_dir, 'backup')
+
+callbacks = [
+    tf.keras.callbacks.TensorBoard(log_dir=log_dir),
+    tf.keras.callbacks.ModelCheckpoint(filepath=ckpt_filepath),
+    tf.keras.callbacks.experimental.BackupAndRestore(backup_dir=backup_dir),
+]
+
+model.fit(dc, epochs=5, steps_per_epoch=1000, callbacks=callbacks)
 
 model.summary()
 
 # evaluate the model
-test_loss, test_accuracy, test_roc_auc, test_pr_auc = model.evaluate(test_dataset)
-print('\n\nTest Loss {}, Test Accuracy {}, Test ROC AUC {}, Test PR AUC {}'.format(test_loss, test_accuracy,
-                                                                                   test_roc_auc, test_pr_auc))
+eval_accuracy = tf.keras.metrics.Accuracy()
+
+test_dataset = get_dataset(f"{tmp_sample_dir}/testSamples/*/part-*.csv")
+for batch_data, labels in test_dataset:
+    pred = model(batch_data, training=False)
+    actual_pred = tf.cast(tf.greater(pred, 0.5), tf.int64)
+    eval_accuracy.update_state(labels, actual_pred)
+
+print ("Evaluation accuracy: %f" % eval_accuracy.result())
 
 # print some predict results
 predictions = model.predict(test_dataset)
