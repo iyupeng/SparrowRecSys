@@ -183,4 +183,12 @@ public class Movie {
     public void setMovieFeatures(Map<String, String> movieFeatures) {
         this.movieFeatures = movieFeatures;
     }
+
+    public String getMovieFeature(String featureName, String defaultValue) {
+        if (movieFeatures != null && movieFeatures.containsKey(featureName)) {
+            return movieFeatures.get(featureName);
+        } else {
+            return defaultValue;
+        }
+    }
 }

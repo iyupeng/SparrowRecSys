@@ -40,7 +40,7 @@ object NewRatingHandler {
     val ratingStream = env
       .addSource(
         new FlinkKafkaConsumer[String](KafkaMessaging.NEW_RATING_TOPIC_NAME, new SimpleStringSchema(), properties)
-          .setStartFromEarliest())
+          .setStartFromLatest())
 
     // processing
     ratingStream
@@ -89,6 +89,7 @@ object NewRatingHandler {
       println(s"movie features updated with redis key: $movieKey")
     }
 
+    redisClient.close()
     movie_info
   }
 
@@ -209,6 +210,7 @@ object NewRatingHandler {
         val map = JavaConversions.mapAsJavaMap(valueMap)
         redisClient.hmset(userKey, map)
 
+        redisClient.close()
         println(s"user features updated to redis with key: $userKey")
       }
     }

@@ -126,4 +126,12 @@ public class User {
     public void setUserFeatures(Map<String, String> userFeatures) {
         this.userFeatures = userFeatures;
     }
+
+    public String getUserFeature(String featureName, String defaultValue) {
+        if (userFeatures != null && userFeatures.containsKey(featureName)) {
+            return userFeatures.get(featureName);
+        } else {
+            return defaultValue;
+        }
+    }
 }

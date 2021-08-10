@@ -89,7 +89,7 @@ def process_movies(movies: []):
 consumer = KafkaConsumer('sparrow-recsys-new-movie',
                          group_id='sparrow_recsys.bert',
                          bootstrap_servers=KAFKA_SERVERS,
-                         auto_offset_reset='earliest')
+                         auto_offset_reset='latest')
 
 for msg in consumer:
     print(msg.value)

@@ -39,7 +39,7 @@ object NewMovieHandler {
     val movieStream = env
       .addSource(
         new FlinkKafkaConsumer[String](KafkaMessaging.NEW_MOVIE_TOPIC_NAME, new SimpleStringSchema(), properties)
-          .setStartFromEarliest())
+          .setStartFromLatest())
 
     // processing
     movieStream
@@ -92,6 +92,7 @@ object NewMovieHandler {
       val map = JavaConversions.mapAsJavaMap(valueMap)
       redisClient.hmset(movieKey, map)
 
+      redisClient.close()
       println(s"movie features saved to redis with key: $movieKey")
     }
 

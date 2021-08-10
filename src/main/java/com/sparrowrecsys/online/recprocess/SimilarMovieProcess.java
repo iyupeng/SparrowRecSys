@@ -22,7 +22,7 @@ public class SimilarMovieProcess {
         if (null == movie){
             return new ArrayList<>();
         }
-        List<Movie> candidates = candidateGenerator(movie);
+        List<Movie> candidates = retrievalCandidatesByANN(movie);
         List<Movie> rankedList = ranker(movie, candidates, model);
 
         if (rankedList.size() > size){
@@ -101,7 +101,7 @@ public class SimilarMovieProcess {
         }
 
         List<Map.Entry<Movie,Double>> movieScoreList = new ArrayList<>(movieScoreMap.entrySet());
-        movieScoreList.sort(Map.Entry.comparingByValue());
+        movieScoreList.sort(Map.Entry.comparingByValue(Comparator.reverseOrder()));
 
         List<Movie> candidates = new ArrayList<>();
         for (Map.Entry<Movie,Double> movieScoreEntry : movieScoreList){
@@ -109,6 +109,14 @@ public class SimilarMovieProcess {
         }
 
         return candidates.subList(0, Math.min(candidates.size(), size));
+    }
+
+    public static List<Movie> retrievalCandidatesByANN(Movie movie){
+        if (movie == null) {
+            return Collections.emptyList();
+        }
+
+        return DataManager.getInstance().retrievalMoviesByANN(movie);
     }
 
     /**
