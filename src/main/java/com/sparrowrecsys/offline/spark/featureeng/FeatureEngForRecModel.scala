@@ -383,6 +383,7 @@ object FeatureEngForRecModel {
     val resourceFileStream = getClass.getResourceAsStream(resourcePath)
     Files.createDirectories(outPath.getParent)
     Files.copy(resourceFileStream, outPath, StandardCopyOption.REPLACE_EXISTING)
+    resourceFileStream.close()
     val ret = s"file://${outPath.toUri.getPath}"
     println(ret)
     ret

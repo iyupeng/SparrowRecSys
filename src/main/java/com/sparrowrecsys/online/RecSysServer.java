@@ -96,6 +96,7 @@ public class RecSysServer {
         InputStream resourceFileStream = RecSysServer.class.getResourceAsStream(resourcePath);
         Files.createDirectories(outPath.getParent());
         Files.copy(resourceFileStream, outPath, StandardCopyOption.REPLACE_EXISTING);
+        resourceFileStream.close();
         String ret = outPath.toUri().getPath();
         System.out.println(ret);
         return ret;
