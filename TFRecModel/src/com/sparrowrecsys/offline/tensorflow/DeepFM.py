@@ -1,13 +1,13 @@
 import tensorflow as tf
 
-# Training samples path, change to your local path
-training_samples_file_path = tf.keras.utils.get_file("trainingSamples.csv",
-                                                     "file:///Users/zhewang/Workspace/SparrowRecSys/src/main"
-                                                     "/resources/webroot/sampledata/trainingSamples.csv")
-# Test samples path, change to your local path
-test_samples_file_path = tf.keras.utils.get_file("testSamples.csv",
-                                                 "file:///Users/zhewang/Workspace/SparrowRecSys/src/main"
-                                                 "/resources/webroot/sampledata/testSamples.csv")
+# # Training samples path, change to your local path
+# training_samples_file_path = tf.keras.utils.get_file("trainingSamples.csv",
+#                                                      "file:///Users/zhewang/Workspace/SparrowRecSys/src/main"
+#                                                      "/resources/webroot/sampledata/trainingSamples.csv")
+# # Test samples path, change to your local path
+# test_samples_file_path = tf.keras.utils.get_file("testSamples.csv",
+#                                                  "file:///Users/zhewang/Workspace/SparrowRecSys/src/main"
+#                                                  "/resources/webroot/sampledata/testSamples.csv")
 
 
 # load sample as tf dataset
@@ -23,8 +23,8 @@ def get_dataset(file_path):
 
 
 # split as test dataset and training dataset
-train_dataset = get_dataset(training_samples_file_path)
-test_dataset = get_dataset(test_samples_file_path)
+train_dataset = get_dataset("/tmp/webroot/sampledata/trainingSamples/*.csv")
+test_dataset = get_dataset("/tmp/webroot/sampledata/testSamples/*.csv")
 
 # define input for keras model
 inputs = {
@@ -121,6 +121,8 @@ model.compile(
 
 # train the model
 model.fit(train_dataset, epochs=5)
+
+model.summary()
 
 # evaluate the model
 test_loss, test_accuracy, test_roc_auc, test_pr_auc = model.evaluate(test_dataset)

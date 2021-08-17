@@ -51,8 +51,25 @@ public class User {
     }
 
     public void addRating(Rating rating) {
-        this.ratings.add(rating);
-        this.averageRating = (this.averageRating * ratingCount + rating.getScore()) / (ratingCount + 1);
+        // check exist
+        Rating existedOne = null;
+        for (Rating r: this.ratings) {
+            if (r.userId == rating.userId && r.movieId == rating.movieId) {
+                existedOne = r;
+                break;
+            }
+        }
+
+        if (existedOne != null) {
+            this.averageRating = (this.averageRating * ratingCount - existedOne.getScore() + rating.getScore()) / ratingCount;
+            existedOne.setScore(rating.getScore());
+            existedOne.setTimestamp(rating.getTimestamp());
+
+        } else {
+            this.ratings.add(rating);
+            this.averageRating = (this.averageRating * ratingCount + rating.getScore()) / (ratingCount + 1);
+            ratingCount++;
+        }
         if (rating.getScore() > highestRating){
             highestRating = rating.getScore();
         }
@@ -60,8 +77,6 @@ public class User {
         if (rating.getScore() < lowestRating){
             lowestRating = rating.getScore();
         }
-
-        ratingCount++;
     }
 
     public double getAverageRating() {
@@ -110,5 +125,13 @@ public class User {
 
     public void setUserFeatures(Map<String, String> userFeatures) {
         this.userFeatures = userFeatures;
+    }
+
+    public String getUserFeature(String featureName, String defaultValue) {
+        if (userFeatures != null && userFeatures.containsKey(featureName)) {
+            return userFeatures.get(featureName);
+        } else {
+            return defaultValue;
+        }
     }
 }

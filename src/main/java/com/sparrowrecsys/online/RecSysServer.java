@@ -7,9 +7,16 @@ import org.eclipse.jetty.servlet.DefaultServlet;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.util.resource.Resource;
+
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 
 /***
  * Recsys Server, end point of online recommendation service
@@ -22,7 +29,7 @@ public class RecSysServer {
     }
 
     //recsys server port number
-    private static final int DEFAULT_PORT = 6010;
+    private static final int DEFAULT_PORT = 8010;
 
     public void run() throws Exception{
 
@@ -41,22 +48,27 @@ public class RecSysServer {
         {
             throw new IllegalStateException("Unable to determine webroot URL location");
         }
+        String basePath = webRootLocation.toExternalForm().replaceFirst("/index.html$","/");
 
         //set index.html as the root page
-        URI webRootUri = URI.create(webRootLocation.toURI().toASCIIString().replaceFirst("/index.html$","/"));
-        System.out.printf("Web Root URI: %s%n", webRootUri.getPath());
+        URI webRootUri = URI.create(webRootLocation.toExternalForm().replaceFirst("/index.html$","/"));
+        System.out.printf("Web Root URI: %s%n", basePath);
 
         //load all the data to DataManager
-        DataManager.getInstance().loadData(webRootUri.getPath() + "sampledata/movies.csv",
-                webRootUri.getPath() + "sampledata/links.csv",webRootUri.getPath() + "sampledata/ratings.csv",
-                webRootUri.getPath() + "modeldata/item2vecEmb.csv",
-                webRootUri.getPath() + "modeldata/userEmb.csv",
-                "i2vEmb", "uEmb");
+        DataManager.getInstance().loadData(
+                resourceToLocal("/webroot/sampledata/movies.csv"),
+                resourceToLocal("/webroot/sampledata/links.csv"),
+                resourceToLocal("/webroot/sampledata/ratings.csv"),
+                resourceToLocal("/webroot/modeldata/item2vecEmb.csv"),
+                resourceToLocal("/webroot/modeldata/userEmb.csv"),
+                "i2vEmb",
+                "uEmb");
 
         //create server context
         ServletContextHandler context = new ServletContextHandler();
         context.setContextPath("/");
-        context.setBaseResource(Resource.newResource(webRootUri));
+//        context.setBaseResource(Resource.newResource(webRootUri));
+        context.setResourceBase(basePath);
         context.setWelcomeFiles(new String[] { "index.html" });
         context.getMimeTypes().addMimeMapping("txt","text/plain;charset=utf-8");
 
@@ -67,6 +79,8 @@ public class RecSysServer {
         context.addServlet(new ServletHolder(new SimilarMovieService()), "/getsimilarmovie");
         context.addServlet(new ServletHolder(new RecommendationService()), "/getrecommendation");
         context.addServlet(new ServletHolder(new RecForYouService()), "/getrecforyou");
+        context.addServlet(new ServletHolder(new MovieCreateService()), "/createmovie");
+        context.addServlet(new ServletHolder(new RatingCreateService()), "/createrating");
 
         //set url handler
         server.setHandler(context);
@@ -75,5 +89,16 @@ public class RecSysServer {
         //start Server
         server.start();
         server.join();
+    }
+
+    public static String resourceToLocal(String resourcePath) throws IOException {
+        Path outPath = Paths.get("/tmp/" + resourcePath);
+        InputStream resourceFileStream = RecSysServer.class.getResourceAsStream(resourcePath);
+        Files.createDirectories(outPath.getParent());
+        Files.copy(resourceFileStream, outPath, StandardCopyOption.REPLACE_EXISTING);
+        resourceFileStream.close();
+        String ret = outPath.toUri().getPath();
+        System.out.println(ret);
+        return ret;
     }
 }

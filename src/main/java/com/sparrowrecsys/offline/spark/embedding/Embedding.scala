@@ -1,6 +1,7 @@
 package com.sparrowrecsys.offline.spark.embedding
 
 import java.io.{BufferedWriter, File, FileWriter}
+import java.nio.file.{Files, Paths, StandardCopyOption}
 
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkConf
@@ -28,7 +29,7 @@ object Embedding {
 
     //path of rating data
     val ratingsResourcesPath = this.getClass.getResource(rawSampleDataPath)
-    val ratingSamples = sparkSession.read.format("csv").option("header", "true").load(ratingsResourcesPath.getPath)
+    val ratingSamples = sparkSession.read.format("csv").option("header", "true").load(resourceToLocal(rawSampleDataPath))
 
     //sort by timestamp udf
     val sortUdf: UserDefinedFunction = udf((rows: Seq[Row]) => {
@@ -52,7 +53,7 @@ object Embedding {
 
   def generateUserEmb(sparkSession: SparkSession, rawSampleDataPath: String, word2VecModel: Word2VecModel, embLength:Int, embOutputFilename:String, saveToRedis:Boolean, redisKeyPrefix:String): Unit ={
     val ratingsResourcesPath = this.getClass.getResource(rawSampleDataPath)
-    val ratingSamples = sparkSession.read.format("csv").option("header", "true").load(ratingsResourcesPath.getPath)
+    val ratingSamples = sparkSession.read.format("csv").option("header", "true").load(resourceToLocal(rawSampleDataPath))
     ratingSamples.show(10, false)
 
     val userEmbeddings = new ArrayBuffer[(String, Array[Float])]()
@@ -79,7 +80,8 @@ object Embedding {
 
 
     val embFolderPath = this.getClass.getResource("/webroot/modeldata/")
-    val file = new File(embFolderPath.getPath + embOutputFilename)
+    val file = new File("/tmp/webroot/modeldata/" + embOutputFilename)
+    file.getParentFile.mkdirs()
     val bw = new BufferedWriter(new FileWriter(file))
 
     for (userEmb <- userEmbeddings) {
@@ -115,7 +117,8 @@ object Embedding {
     }
 
     val embFolderPath = this.getClass.getResource("/webroot/modeldata/")
-    val file = new File(embFolderPath.getPath + embOutputFilename)
+    val file = new File("/tmp/webroot/modeldata/" + embOutputFilename)
+    file.getParentFile.mkdirs()
     val bw = new BufferedWriter(new FileWriter(file))
     for (movieId <- model.getVectors.keys) {
       bw.write(movieId + ":" + model.getVectors(movieId).mkString(" ") + "\n")
@@ -280,5 +283,16 @@ object Embedding {
     val model = trainItem2vec(spark, samples, embLength, "item2vecEmb.csv", saveToRedis = false, "i2vEmb")
     //graphEmb(samples, spark, embLength, "itemGraphEmb.csv", saveToRedis = true, "graphEmb")
     //generateUserEmb(spark, rawSampleDataPath, model, embLength, "userEmb.csv", saveToRedis = false, "uEmb")
+  }
+
+  def resourceToLocal(resourcePath: String): String = {
+    val outPath = Paths.get("/tmp/" + resourcePath)
+    val resourceFileStream = getClass.getResourceAsStream(resourcePath)
+    Files.createDirectories(outPath.getParent)
+    Files.copy(resourceFileStream, outPath, StandardCopyOption.REPLACE_EXISTING)
+    resourceFileStream.close()
+    val ret = s"file://${outPath.toUri.getPath}"
+    println(ret)
+    ret
   }
 }

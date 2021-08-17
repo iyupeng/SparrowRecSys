@@ -1,13 +1,13 @@
 import tensorflow as tf
 
-# Training samples path, change to your local path
-training_samples_file_path = tf.keras.utils.get_file("trainingSamples.csv",
-                                                     "file:///Users/zhewang/Workspace/SparrowRecSys/src/main"
-                                                     "/resources/webroot/sampledata/trainingSamples.csv")
-# Test samples path, change to your local path
-test_samples_file_path = tf.keras.utils.get_file("testSamples.csv",
-                                                 "file:///Users/zhewang/Workspace/SparrowRecSys/src/main"
-                                                 "/resources/webroot/sampledata/testSamples.csv")
+# # Training samples path, change to your local path
+# training_samples_file_path = tf.keras.utils.get_file("trainingSamples.csv",
+#                                                      "file:///Users/zhewang/Workspace/SparrowRecSys/src/main"
+#                                                      "/resources/webroot/sampledata/trainingSamples.csv")
+# # Test samples path, change to your local path
+# test_samples_file_path = tf.keras.utils.get_file("testSamples.csv",
+#                                                  "file:///Users/zhewang/Workspace/SparrowRecSys/src/main"
+#                                                  "/resources/webroot/sampledata/testSamples.csv")
 
 
 # load sample as tf dataset
@@ -23,8 +23,8 @@ def get_dataset(file_path):
 
 
 # split as test dataset and training dataset
-train_dataset = get_dataset(training_samples_file_path)
-test_dataset = get_dataset(test_samples_file_path)
+train_dataset = get_dataset("/tmp/webroot/sampledata/trainingSamples/*.csv")
+test_dataset = get_dataset("/tmp/webroot/sampledata/testSamples/*.csv")
 
 # movie id embedding feature
 movie_col = tf.feature_column.categorical_column_with_identity(key='movieId', num_buckets=1001)
@@ -82,6 +82,8 @@ model.compile(
 # train the model
 model.fit(train_dataset, epochs=5)
 
+model.summary()
+
 # evaluate the model
 test_loss, test_accuracy, test_roc_auc, test_pr_auc = model.evaluate(test_dataset)
 print('\n\nTest Loss {}, Test Accuracy {}, Test ROC AUC {}, Test PR AUC {}'.format(test_loss, test_accuracy,
@@ -96,7 +98,7 @@ for prediction, goodRating in zip(predictions[:12], list(test_dataset)[0][1][:12
 
 tf.keras.models.save_model(
     model,
-    "file:///Users/zhewang/Workspace/SparrowRecSys/src/main/resources/webroot/modeldata/neuralcf/002",
+    "file:///tmp/webroot/modeldata/neuralcf/002",
     overwrite=True,
     include_optimizer=True,
     save_format=None,
