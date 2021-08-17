@@ -1,17 +1,134 @@
 # SparrowRecSys
 SparrowRecSys是一个电影推荐系统，名字SparrowRecSys（麻雀推荐系统），取自“麻雀虽小，五脏俱全”之意。项目是一个基于maven的混合语言项目，同时包含了TensorFlow，Spark，Jetty Server等推荐系统的不同模块。希望你能够利用SparrowRecSys进行推荐系统的学习，并有机会一起完善它。
 
-## 基于SparrowRecSys的实践课程
-受极客时间邀请开设 [深度学习推荐系统实战](http://gk.link/a/10lyE) 课程，详细讲解了SparrowRecSys的所有技术细节，覆盖了深度学习模型结构，模型训练，特征工程，模型评估，模型线上服务及推荐服务器内部逻辑等模块。
-
 ## 环境要求
 * Java 8
 * Scala 2.11
 * Python 3.6+
 * TensorFlow 2.0+
+* Mysql 5.6
+* Redis
+* Kafka
+* Hadoop 2.9.2
+* Spark 2.4.7+
+* Flink 1.12.0
+* Docker
+* Python packages: `tensorflow, tensorflow_hub, tensorflow_text, redis, kafka-python`
 
-## 快速开始
-将项目用IntelliJ打开后，找到`RecSysServer`，右键点选`Run`，然后在浏览器中输入`http://localhost:6010/`即可看到推荐系统的前端效果。
+## 启动步骤
+### 编译
+```
+mvn clean package
+
+```
+
+
+### 导入初始数据
+```
+
+# 用 sql/db.sql 创建MySQL数据库
+
+# 将movies和ratings数据导入MySQL (数据位于src/main/resources/webroot/sampledata/)
+
+# 将MySQL数据导入HDFS sh ./bin/mysql_to_hdfs.sh
+
+```
+
+
+### 训练电影Embedding
+```
+python TFRecModel/src/com/sparrowrecsys/offline/tensorflow/HDFSMoviesBERTEmbedding.py
+
+```
+
+
+### 启动Parameter Servers 和 Workers
+```
+export TF_CONFIG='{"cluster":{"worker":["localhost:12345","localhost:12346"],"ps":["localhost:23456","localhost:23457"],"chief":["localhost:34567"]},"task":{"type":"worker","index":0}}'
+
+nohup python TFRecModel/src/com/sparrowrecsys/offline/tensorflow/TFServer.py &
+
+
+
+export TF_CONFIG='{"cluster":{"worker":["localhost:12345","localhost:12346"],"ps":["localhost:23456","localhost:23457"],"chief":["localhost:34567"]},"task":{"type":"worker","index":1}}'
+
+nohup python TFRecModel/src/com/sparrowrecsys/offline/tensorflow/TFServer.py &
+
+
+
+export TF_CONFIG='{"cluster":{"worker":["localhost:12345","localhost:12346"],"ps":["localhost:23456","localhost:23457"],"chief":["localhost:34567"]},"task":{"type":"ps","index":0}}'
+
+nohup python TFRecModel/src/com/sparrowrecsys/offline/tensorflow/TFServer.py &
+
+
+
+export TF_CONFIG='{"cluster":{"worker":["localhost:12345","localhost:12346"],"ps":["localhost:23456","localhost:23457"],"chief":["localhost:34567"]},"task":{"type":"ps","index":1}}'
+
+nohup python TFRecModel/src/com/sparrowrecsys/offline/tensorflow/TFServer.py &
+
+```
+
+### 按一定的启动频率设置以下几个定时任务:
+```
+# movie embedding
+./bin/spark-submit --name EmbeddingLSH --master yarn --deploy-mode cluster --class com.sparrowrecsys.offline.spark.embedding.EmbeddingLSH ~/work/recsys/SparrowRecSys/target/SparrowRecSys-1.0-SNAPSHOT-jar-with-dependencies.jar
+
+# feature engineering
+./bin/spark-submit --name FeatureEngineering --master yarn --deploy-mode cluster --class com.sparrowrecsys.offline.spark.featureeng.FeatureEngForRecModel ~/work/recsys/SparrowRecSys/target/SparrowRecSys-1.0-SNAPSHOT-jar-with-dependencies.jar
+
+# training
+export TF_CONFIG='{"cluster":{"worker":["localhost:12345","localhost:12346"],"ps":["localhost:23456","localhost:23457"],"chief":["localhost:34567"]},"task":{"type":"chief","index":0}}'; python TFRecModel/src/com/sparrowrecsys/offline/tensorflow/WideNDeep.py
+
+```
+
+
+### 启动Web服务器
+```
+java -jar target/SparrowRecSys-1.0-SNAPSHOT-jar-with-dependencies.jar
+```
+
+### 启动Tensorflow Serving
+```
+docker run -t --rm -p 8501:8501 \
+
+  -v "~/work/recsys/SparrowRecSys/tmp_model/widendeep:/models/sparrow_recsys_widedeep" \
+
+  -e MODEL_NAME=sparrow_recsys_widedeep \
+
+  tensorflow/serving &
+
+```
+
+
+
+### 启动以下几个实时流数据处理任务
+```
+python TFRecModel/src/com/sparrowrecsys/nearline/tensorflow/KafkaMoviesBERTEmbedding.py
+
+./bin/flink run -p 2 -c com.sparrowrecsys.nearline.flink.NewMovieHandler  ~/work/recsys/SparrowRecSys/target/SparrowRecSys-1.0-SNAPSHOT-jar-with-dependencies.jar
+
+./bin/flink run -p 2 -c com.sparrowrecsys.nearline.flink.NewRatingHandler  ~/work/recsys/SparrowRecSys/target/SparrowRecSys-1.0-SNAPSHOT-jar-with-dependencies.jar
+
+```
+
+## 清理步骤
+```
+# 停止Web服务器、Tensorflow Serving
+
+# 停止定时任务和实时流任务.
+
+# 删除MySQL中sparrow_recsys数据库
+
+# 删除redis中sparrow_recsys开头的数据
+
+# 删除 hdfs:///sparrow_recsys/*
+
+# 删除 ./kafka-movie-embeddings.csv ./tmp_model ./tmp_sampledata
+
+# 删除Kafka 日志数据，一般位于/tmp/kafka-logs
+
+```
+
 
 ## 项目数据
 项目数据来源于开源电影数据集[MovieLens](https://grouplens.org/datasets/movielens/)，项目自带数据集对MovieLens数据集进行了精简，仅保留1000部电影和相关评论、用户数据。全量数据集请到MovieLens官方网站进行下载，推荐使用MovieLens 20M Dataset。

@@ -147,6 +147,7 @@ object NewRatingHandler {
           "userGenre1", "userGenre2", "userGenre3", "userGenre4", "userGenre5",
           "userGenreCount1", "userGenreCount2","userGenreCount3","userGenreCount4","userGenreCount5")
         val userFeatures = redisClient.hmget(userKey, userFields: _*)
+        userFeatures.set(userFields.toList.indexOf("userId"), userId)
 
         for (index <- 1 to 5) {
           val ratedMovie = userFeatures.get(userFields.toList.indexOf(s"userRatedMovie$index"))
