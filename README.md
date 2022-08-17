@@ -6,12 +6,12 @@ SparrowRecSys是一个电影推荐系统，名字SparrowRecSys（麻雀推荐系
 * Scala 2.11
 * Python 3.6+
 * TensorFlow 2.0+
-* Mysql 5.6
+* Mysql
 * Redis
 * Kafka
-* Hadoop 2.9.2
-* Spark 2.4.7+
-* Flink 1.12.0
+* Hadoop 2.7+
+* Spark 2.4+
+* Flink 1.12+
 * Docker
 * Python packages: `tensorflow, tensorflow_hub, tensorflow_text, redis, kafka-python`
 
