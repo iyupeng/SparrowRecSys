@@ -13,15 +13,15 @@ import tensorflow_text as text
 import os
 
 
-HDFS_PATH_MOVIE_EMBEDDINGS="hdfs:///sparrow_recsys/movie-embeddings/"
-REDIS_SERVER="localhost"
+HDFS_PATH_MOVIE_EMBEDDINGS="hdfs://demo-recsys-data:8020/sparrow_recsys/movie-embeddings/"
+REDIS_SERVER="demo-recsys-data"
 REDIS_PORT=6379
 REDIS_KEY_MOVIE_EMBEDDING_VERSION="sparrow_recsys:version:me"
 REDIS_KEY_PREFIX_MOVIE_EMBEDDING="sparrow_recsys:me"
 
 # load movies from HDFS
 movies = []
-cat_hdfs_movies = subprocess.Popen(["hadoop", "fs", "-cat", "hdfs:///sparrow_recsys/movies/*/part-*"], stdout=subprocess.PIPE)
+cat_hdfs_movies = subprocess.Popen(["hadoop", "fs", "-cat", "hdfs://demo-recsys-data:8020/sparrow_recsys/movies/*/part-*"], stdout=subprocess.PIPE)
 for line in cat_hdfs_movies.stdout:
     movie_str = line.strip()
     movie_info = movie_str.split(b"\t")
@@ -35,8 +35,8 @@ if len(movies) == 0:
     exit(1)
 
 # get embeddings
-tfhub_handle_preprocess = "https://hub.tensorflow.google.cn/tensorflow/bert_en_uncased_preprocess/3"
-tfhub_handle_encoder = "https://hub.tensorflow.google.cn/tensorflow/small_bert/bert_en_uncased_L-4_H-128_A-2/2"
+tfhub_handle_preprocess = "https://tfhub.dev/tensorflow/bert_en_uncased_preprocess/3"
+tfhub_handle_encoder = "https://tfhub.dev/tensorflow/small_bert/bert_en_uncased_L-4_H-128_A-2/2"
 
 bert_preprocess_model = hub.KerasLayer(tfhub_handle_preprocess)
 bert_model = hub.KerasLayer(tfhub_handle_encoder)

@@ -8,9 +8,9 @@ import json
 
 import tensorflow as tf
 
-HDFS_PATH_SAMPLE_DATA = "hdfs:///sparrow_recsys/sampledata/"
-HDFS_PATH_MODEL_DATA = "hdfs:///sparrow_recsys/modeldata/"
-REDIS_SERVER="localhost"
+HDFS_PATH_SAMPLE_DATA = "hdfs://demo-recsys-data:8020/sparrow_recsys/sampledata/"
+HDFS_PATH_MODEL_DATA = "hdfs://demo-recsys-data:8020/sparrow_recsys/modeldata/"
+REDIS_SERVER="demo-recsys-data"
 REDIS_PORT=6379
 REDIS_KEY_VERSION_MODEL_WIDE_DEEP = "sparrow_recsys:version:model_wd"
 
