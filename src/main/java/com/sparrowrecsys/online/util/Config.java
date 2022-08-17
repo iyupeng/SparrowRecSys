@@ -25,7 +25,7 @@ public class Config {
 
     public static String REDIS_KEY_VERSION_MODEL_WIDE_DEEP = "sparrow_recsys:version:model_wd";
     public static String TF_SERVING_URL_PREFIX_WIDE_DEEP =
-            "http://demo-recsys-tensorflow:8501/v1/models/sparrow_recsys_widedeep";
+            "http://demo-recsys-tensorflow-serving:8501/v1/models/sparrow_recsys_widedeep";
 
     public static String HDFS_PATH_ALL_MOVIE_EMBEDDINGS = "hdfs://demo-recsys-data:8020/sparrow_recsys/movie-embeddings/";
 
