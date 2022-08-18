@@ -120,7 +120,9 @@ object EmbeddingLSH {
           val embedding = r.getAs[DenseVector]("emb")
           Seq(s"${Config.REDIS_KEY_PREFIX_USER_EMBEDDING}:$version:$id", s"$count|${embedding.values.mkString(",")}")
         }).toArray
-        RedisClient.getInstance().mset(keyValues: _*)
+        if (keyValues.length > 0) {
+          RedisClient.getInstance().mset(keyValues: _*)
+        }
       }
     )
   }

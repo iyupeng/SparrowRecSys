@@ -13,16 +13,16 @@ import tensorflow_text as text
 
 from kafka import KafkaConsumer
 
-HDFS_PATH_MOVIE_EMBEDDINGS="hdfs:///sparrow_recsys/movie-embeddings/"
+HDFS_PATH_MOVIE_EMBEDDINGS="hdfs://demo-recsys-data:8020/sparrow_recsys/movie-embeddings/"
 HDFS_MOVIE_EMBEDDING_BATCH_SIZE=3
-REDIS_SERVER="localhost"
+REDIS_SERVER="demo-recsys-data"
 REDIS_PORT=6379
-KAFKA_SERVERS="localhost:9092"
+KAFKA_SERVERS="demo-recsys-data:9092"
 REDIS_KEY_MOVIE_EMBEDDING_VERSION="sparrow_recsys:version:me"
 REDIS_KEY_PREFIX_MOVIE_EMBEDDING="sparrow_recsys:me"
 
-tfhub_handle_preprocess = "https://hub.tensorflow.google.cn/tensorflow/bert_en_uncased_preprocess/3"
-tfhub_handle_encoder = "https://hub.tensorflow.google.cn/tensorflow/small_bert/bert_en_uncased_L-4_H-128_A-2/2"
+tfhub_handle_preprocess = "https://tfhub.dev/tensorflow/bert_en_uncased_preprocess/3"
+tfhub_handle_encoder = "https://tfhub.dev/tensorflow/small_bert/bert_en_uncased_L-4_H-128_A-2/2"
 
 bert_preprocess_model = hub.KerasLayer(tfhub_handle_preprocess)
 bert_model = hub.KerasLayer(tfhub_handle_encoder)

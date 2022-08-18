@@ -37,11 +37,12 @@ object FeatureEngForRecModel {
     val samplesWithMovies1 = ratingSamples.join(movieSamples, Seq("movieId"), "left")
     //add release year
     val extractReleaseYearUdf = udf({(title: String) => {
-      if (null == title || title.trim.length < 6) {
+      if (null == title || title.stripPrefix("\"").stripSuffix("\"").trim.length < 6) {
         1990 // default value
       }
       else {
-        val yearString = title.trim.substring(title.length - 5, title.length - 1)
+        val tempTitle = title.stripPrefix("\"").stripSuffix("\"").trim
+        val yearString = tempTitle.substring(tempTitle.length - 5, tempTitle.length - 1)
         try {
           yearString.toInt
         } catch {
@@ -53,9 +54,11 @@ object FeatureEngForRecModel {
     //add title
     val extractTitleUdf = udf({(title: String) => {
       val reg = ".*\\(\\d{4}\\)$".r
-      title.trim match {
-        case reg() => title.trim.substring(0, title.trim.length - 6).trim
-        case _ => title.trim
+
+      val tempTitle = title.stripPrefix("\"").stripSuffix("\"").trim
+      tempTitle match {
+        case reg() => tempTitle.substring(0, tempTitle.trim.length - 6).trim
+        case _ => tempTitle
       }
     }})
 

@@ -101,9 +101,11 @@ object NewMovieHandler {
 
   def extractReleaseYear(title: String): Int = {
     val reg = ".*\\(\\d{4}\\)$".r
-    title.trim match {
+
+    val tempTitle = title.stripPrefix("\"").stripSuffix("\"").trim
+    tempTitle match {
       case reg() =>
-        val yearString = title.trim.substring(title.length - 5, title.length - 1)
+        val yearString = tempTitle.substring(tempTitle.length - 5, tempTitle.length - 1)
         yearString.toInt
       case _ => 1990
     }
@@ -111,9 +113,12 @@ object NewMovieHandler {
 
   def extractMovieTitle(title: String): String = {
     val reg = ".*\\(\\d{4}\\)$".r
-    title.trim match {
-      case reg() => title.trim.substring(0, title.trim.length - 6).trim
-      case _ => title.trim
+
+
+    val tempTitle = title.stripPrefix("\"").stripSuffix("\"").trim
+    tempTitle match {
+      case reg() => tempTitle.substring(0, tempTitle.length - 6).trim
+      case _ => tempTitle
     }
   }
 }
