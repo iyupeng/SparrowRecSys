@@ -1,7 +1,13 @@
 # SparrowRecSys
 SparrowRecSys是一个电影推荐系统，名字SparrowRecSys（麻雀推荐系统），取自“麻雀虽小，五脏俱全”之意。项目是一个基于maven的混合语言项目，同时包含了TensorFlow，Spark，Jetty Server等推荐系统的不同模块。希望你能够利用SparrowRecSys进行推荐系统的学习，并有机会一起完善它。
 
+注意: 本项目中的推荐算法/模型，仅为展示推荐系统所用，不保证在实际应用中的准确度。
+
 ## 运行方式 1: 于 Docker 中运行
+
+### Docker运行方式的整体架构
+![alt text](https://github.com/iyupeng/SparrowRecSys/raw/master/docs/sparrowrecsysarchindocker.png)
+
 ### 启动容器
 ```bash
 ######## create network ########
@@ -84,9 +90,6 @@ curl -X POST \
 }'
 ```
 
-### Docker运行方式的整体架构
-![alt text](https://github.com/iyupeng/SparrowRecSys/raw/master/docs/sparrowrecsysarchindocker.png)
-
 ## 运行方式 2: bare metal 安装运行
 
 ### 环境要求
@@ -104,6 +107,8 @@ curl -X POST \
 * Python packages: `tensorflow, tensorflow_hub, tensorflow_text, redis, kafka-python`
 
 ### 启动步骤
+首先修改代码中含有 `demo-recsys-data`, `demo-recsys-tensorflow-serving` 相关的URL为实际配置
+
 编译
 ```
 mvn clean package
