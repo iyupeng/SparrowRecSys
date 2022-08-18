@@ -1,7 +1,95 @@
 # SparrowRecSys
 SparrowRecSys是一个电影推荐系统，名字SparrowRecSys（麻雀推荐系统），取自“麻雀虽小，五脏俱全”之意。项目是一个基于maven的混合语言项目，同时包含了TensorFlow，Spark，Jetty Server等推荐系统的不同模块。希望你能够利用SparrowRecSys进行推荐系统的学习，并有机会一起完善它。
 
-## 环境要求
+## 运行方式 1: 于 Docker 中运行
+### 启动容器
+```bash
+######## create network ########
+docker network create --driver bridge demo-recsys-net
+
+######## start data container ########
+docker run -dti --network demo-recsys-net \
+    --name demo-recsys-data \
+    yuzhiyu3/demo-recsys-data:v1.1
+# wait for HDFS startup
+sleep 120
+
+######## start tensorflow container ########
+docker run -dti --network demo-recsys-net \
+    --name demo-recsys-tensorflow \
+    yuzhiyu3/demo-recsys-tensorflow:v1.1
+
+######## start spark & flink container ########
+docker run -dti --network demo-recsys-net \
+    --name demo-recsys-spark-flink \
+    -p 18088:8088 -p 18081:8081 -p 18042:8042 \
+    yuzhiyu3/demo-recsys-spark-flink:v1.1
+# wait for Spark job (EmbeedingLSH)
+sleep 180
+
+######## start tensorflow_serving container ########
+docker run -dti --network demo-recsys-net \
+    --name demo-recsys-tensorflow-serving \
+    -e MODEL_NAME=sparrow_recsys_widedeep \
+    -p 18501:8501 \
+    yuzhiyu3/demo-recsys-tensorflow-serving:v1.1
+
+######## start web server container ########
+docker run -dti --network demo-recsys-net \
+    --name demo-recsys-web \
+    -p 18010:8010 \
+    yuzhiyu3/demo-recsys-web:v1.1
+```
+
+### 检查运行状态
+```text
+在浏览器中查看demo网站:
+http://ip_of_your_host:18010/
+
+在浏览器中查看spark任务运行状态:
+http://ip_of_your_host:18088/
+
+在浏览器中查看flink任务运行状态:
+http://ip_of_your_host:18081/
+
+测试tensorflow能正常响应inference请求:
+curl -X POST \
+  http://ip_of_your_host:18501/v1/models/sparrow_recsys_widedeep:predict \
+  -H 'cache-control: no-cache' \
+  -H 'content-type: application/json' \
+  -d '{
+    "instances":
+    [
+        {
+            "movieGenre2": "",
+            "userAvgRating": 4,
+            "movieGenre1": "Drama",
+            "movieRatingStddev": 0.89,
+            "userRatingStddev": 1.1,
+            "userGenre4": "War",
+            "movieId": 501,
+            "userGenre5": "Drama",
+            "userGenre2": "Adventure",
+            "userId": 55,
+            "userGenre3": "Romance",
+            "userGenre1": "Action",
+            "movieAvgRating": 3.6,
+            "userRatedMovie1": 858,
+            "movieRatingCount": 5,
+            "userRatingCount": 6,
+            "releaseYear": 1993,
+            "movieGenre3": ""
+        }
+    ]
+}'
+```
+
+### Docker运行方式的整体架构
+![alt text](https://github.com/iyupeng/SparrowRecSys/raw/master/docs/sparrowrecsysarchindocker.png)
+
+## 运行方式 2: bare metal 安装运行
+
+### 环境要求
 * Java 8
 * Scala 2.11
 * Python 3.6+
@@ -15,15 +103,15 @@ SparrowRecSys是一个电影推荐系统，名字SparrowRecSys（麻雀推荐系
 * Docker
 * Python packages: `tensorflow, tensorflow_hub, tensorflow_text, redis, kafka-python`
 
-## 启动步骤
-### 编译
+### 启动步骤
+编译
 ```
 mvn clean package
 
 ```
 
 
-### 导入初始数据
+导入初始数据
 ```
 
 # 用 sql/db.sql 创建MySQL数据库
@@ -34,15 +122,14 @@ mvn clean package
 
 ```
 
-
-### 训练电影Embedding
+训练电影Embedding
 ```
 python TFRecModel/src/com/sparrowrecsys/offline/tensorflow/HDFSMoviesBERTEmbedding.py
 
 ```
 
 
-### 启动Parameter Servers 和 Workers
+启动Parameter Servers 和 Workers
 ```
 export TF_CONFIG='{"cluster":{"worker":["localhost:12345","localhost:12346"],"ps":["localhost:23456","localhost:23457"],"chief":["localhost:34567"]},"task":{"type":"worker","index":0}}'
 
@@ -68,7 +155,7 @@ nohup python TFRecModel/src/com/sparrowrecsys/offline/tensorflow/TFServer.py &
 
 ```
 
-### 按一定的启动频率设置以下几个定时任务:
+按一定的启动频率设置以下几个定时任务:
 ```
 # movie embedding
 ./bin/spark-submit --name EmbeddingLSH --master yarn --deploy-mode cluster --class com.sparrowrecsys.offline.spark.embedding.EmbeddingLSH ~/work/recsys/SparrowRecSys/target/SparrowRecSys-1.0-SNAPSHOT-jar-with-dependencies.jar
@@ -82,12 +169,12 @@ export TF_CONFIG='{"cluster":{"worker":["localhost:12345","localhost:12346"],"ps
 ```
 
 
-### 启动Web服务器
+启动Web服务器
 ```
 java -jar target/SparrowRecSys-1.0-SNAPSHOT-jar-with-dependencies.jar
 ```
 
-### 启动Tensorflow Serving
+启动Tensorflow Serving
 ```
 docker run -t --rm -p 8501:8501 \
 
@@ -101,7 +188,7 @@ docker run -t --rm -p 8501:8501 \
 
 
 
-### 启动以下几个实时流数据处理任务
+启动以下几个实时流数据处理任务
 ```
 python TFRecModel/src/com/sparrowrecsys/nearline/tensorflow/KafkaMoviesBERTEmbedding.py
 
@@ -111,7 +198,7 @@ python TFRecModel/src/com/sparrowrecsys/nearline/tensorflow/KafkaMoviesBERTEmbed
 
 ```
 
-## 清理步骤
+### 清理步骤
 ```
 # 停止Web服务器、Tensorflow Serving
 
