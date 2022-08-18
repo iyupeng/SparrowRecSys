@@ -3,7 +3,6 @@ package com.sparrowrecsys.online.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sparrowrecsys.online.datamanager.DataManager;
 import com.sparrowrecsys.online.datamanager.Movie;
-import org.apache.parquet.Strings;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -13,7 +12,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * MovieCreateService, create new movie
@@ -47,7 +45,7 @@ public class MovieCreateService extends HttpServlet {
                     }
                 }
             }
-            String genres = Strings.join(genreNames, "|");
+            String genres = String.join("|", genreNames);
 
             int movieId = DataManager.getInstance().addNewMovie(title, genres);
 
