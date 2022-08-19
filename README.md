@@ -90,7 +90,7 @@ curl -X POST \
 }'
 ```
 
-## 运行方式 2: bare metal 安装运行
+## 运行方式 2: 于 Linux Host 中安装运行
 
 ### 环境要求
 * Java 8
