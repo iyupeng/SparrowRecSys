@@ -88,6 +88,20 @@ curl -X POST \
         }
     ]
 }'
+
+新增电影:
+curl --location --request POST 'http://ip_of_your_host:18010/createmovie' \
+    --header 'Content-Type: application/x-www-form-urlencoded' \
+    --data-urlencode 'title=Test Movile (2022)' \
+    --data-urlencode 'genres=1,5'
+
+新增用户评分:
+curl --location --request POST 'http://ip_of_your_host:18010/createrating' \
+    --header 'Content-Type: application/x-www-form-urlencoded' \
+    --data-urlencode 'userId=888' \
+    --data-urlencode 'movieId=1001' \
+    --data-urlencode 'rating=4.8'
+
 ```
 
 ## 运行方式 2: 于 Linux Host 中安装运行
